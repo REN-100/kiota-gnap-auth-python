@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kiota-gnap-auth-python"
+version = "0.1.0"
+description = "GNAP authentication provider for Kiota-generated Python clients"
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "microsoft-kiota-abstractions",
+        "http-message-signatures", # To be implemented/integrated
+        ]
+        
