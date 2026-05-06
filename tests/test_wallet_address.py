@@ -8,8 +8,10 @@ import respx
 
 from kiota_gnap_auth.wallet_address import (
     WalletAddressInfo,
+    WalletAddressKey,
     WalletAddressResolutionError,
     resolve_wallet_address,
+    get_wallet_address_keys,
 )
 
 
@@ -20,6 +22,19 @@ VALID_WALLET_RESPONSE = {
     "resourceServer": "https://ilp.rafiki.money",
     "assetCode": "USD",
     "assetScale": 2,
+}
+
+VALID_JWKS_RESPONSE = {
+    "keys": [
+        {
+            "kid": "key-1",
+            "alg": "EdDSA",
+            "use": "sig",
+            "kty": "OKP",
+            "crv": "Ed25519",
+            "x": "11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo",
+        }
+    ]
 }
 
 
@@ -145,3 +160,99 @@ async def test_resolve_auto_prepends_https():
 
     info = await resolve_wallet_address("wallet.example/alice")
     assert info.auth_server == "https://auth.rafiki.money"
+
+
+# --- Wallet Address Keys Tests ---
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_get_wallet_address_keys_success():
+    """Fetches JWKS from wallet address /jwks.json."""
+    respx.get("https://wallet.example/alice/jwks.json").mock(
+        return_value=httpx.Response(200, json=VALID_JWKS_RESPONSE)
+    )
+
+    keys = await get_wallet_address_keys("https://wallet.example/alice")
+
+    assert len(keys) == 1
+    assert isinstance(keys[0], WalletAddressKey)
+    assert keys[0].kty == "OKP"
+    assert keys[0].crv == "Ed25519"
+    assert keys[0].kid == "key-1"
+    assert keys[0].alg == "EdDSA"
+    assert keys[0].use == "sig"
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_get_wallet_address_keys_multiple():
+    """Returns multiple keys."""
+    multi_jwks = {
+        "keys": [
+            {"kty": "OKP", "crv": "Ed25519", "x": "key1-x", "kid": "key-1"},
+            {"kty": "OKP", "crv": "Ed25519", "x": "key2-x", "kid": "key-2"},
+        ]
+    }
+    respx.get("https://wallet.example/alice/jwks.json").mock(
+        return_value=httpx.Response(200, json=multi_jwks)
+    )
+
+    keys = await get_wallet_address_keys("https://wallet.example/alice")
+    assert len(keys) == 2
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_get_wallet_address_keys_payment_pointer():
+    """Converts $ payment pointer for keys."""
+    respx.get("https://wallet.example/alice/jwks.json").mock(
+        return_value=httpx.Response(200, json=VALID_JWKS_RESPONSE)
+    )
+
+    keys = await get_wallet_address_keys("$wallet.example/alice")
+    assert len(keys) == 1
+
+
+@pytest.mark.asyncio
+async def test_get_wallet_address_keys_rejects_http():
+    """Rejects non-HTTPS for wallet address keys."""
+    with pytest.raises(WalletAddressResolutionError, match="HTTPS"):
+        await get_wallet_address_keys("http://wallet.example/alice")
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_get_wallet_address_keys_http_error():
+    """Raises error on non-2xx response."""
+    respx.get("https://wallet.example/alice/jwks.json").mock(
+        return_value=httpx.Response(404, json={"error": "not found"})
+    )
+
+    with pytest.raises(WalletAddressResolutionError, match="404"):
+        await get_wallet_address_keys("https://wallet.example/alice")
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_get_wallet_address_keys_network_error():
+    """Raises error on network failure."""
+    respx.get("https://wallet.example/alice/jwks.json").mock(
+        side_effect=httpx.ConnectError("Connection refused")
+    )
+
+    with pytest.raises(WalletAddressResolutionError, match="Network error"):
+        await get_wallet_address_keys("https://wallet.example/alice")
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_get_wallet_address_keys_missing_keys_array():
+    """Raises error when response has no keys array."""
+    respx.get("https://wallet.example/alice/jwks.json").mock(
+        return_value=httpx.Response(200, json={"not_keys": []})
+    )
+
+    with pytest.raises(WalletAddressResolutionError, match="keys"):
+        await get_wallet_address_keys("https://wallet.example/alice")
+

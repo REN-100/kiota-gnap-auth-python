@@ -24,7 +24,9 @@ from .token_store import InMemoryTokenStore
 # Wallet address resolution (Open Payments)
 from .wallet_address import (
     resolve_wallet_address,
+    get_wallet_address_keys,
     WalletAddressInfo,
+    WalletAddressKey,
     WalletAddressResolutionError,
 )
 
@@ -72,7 +74,9 @@ __all__ = [
     "InMemoryTokenStore",
     # Wallet address
     "resolve_wallet_address",
+    "get_wallet_address_keys",
     "WalletAddressInfo",
+    "WalletAddressKey",
     "WalletAddressResolutionError",
     # Errors
     "GnapError",

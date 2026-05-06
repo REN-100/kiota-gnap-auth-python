@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "shujaapay-kiota-gnap-auth"
-version = "0.1.0"
+version = "0.2.0"
 description = "Kiota GNAP (RFC 9635) authentication provider for Python — Open Payments SDK generation"
 readme = "README.md"
 license = {text = "MIT"}
@@ -44,6 +44,7 @@ dev = [
 Homepage = "https://www.shujaapay.me"
 Repository = "https://github.com/REN-100/kiota-gnap-auth-python"
 Documentation = "https://github.com/REN-100/kiota-gnap-auth-python#readme"
+Changelog = "https://github.com/REN-100/kiota-gnap-auth-python/blob/main/CHANGELOG.md"
 "Bug Tracker" = "https://github.com/REN-100/kiota-gnap-auth-python/issues"
 
 [tool.setuptools.packages.find]

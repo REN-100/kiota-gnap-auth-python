@@ -157,3 +157,123 @@ class WalletAddressResolutionError(Exception):
     def __init__(self, message: str) -> None:
         super().__init__(message)
         self.message = message
+
+
+@dataclass
+class WalletAddressKey:
+    """
+    A JSON Web Key (JWK) bound to a wallet address.
+
+    These keys are registered with an Open Payments authorization server
+    and used to verify the identity of client instances making GNAP
+    grant requests.
+
+    @see https://openpayments.dev/apis/wallet-address-server/operations/get-wallet-address-keys/
+    """
+
+    kty: str
+    """Key type (e.g., 'OKP' for Ed25519)."""
+
+    crv: str
+    """Curve (e.g., 'Ed25519')."""
+
+    x: str
+    """Public key (base64url-encoded)."""
+
+    kid: Optional[str] = None
+    """Key ID."""
+
+    alg: Optional[str] = None
+    """Algorithm (e.g., 'EdDSA')."""
+
+    use: Optional[str] = None
+    """Key usage (e.g., 'sig')."""
+
+
+async def get_wallet_address_keys(
+    wallet_address_url: str,
+    *,
+    timeout: float = 10.0,
+) -> list[WalletAddressKey]:
+    """
+    Fetch the public keys bound to a wallet address.
+
+    Performs an HTTP GET to ``{wallet_address}/jwks.json`` to retrieve the
+    JWKS (JSON Web Key Set) associated with the wallet address.
+    These keys are used by authorization servers to verify client identity.
+
+    Args:
+        wallet_address_url: The wallet address URL
+        timeout: HTTP request timeout in seconds
+
+    Returns:
+        List of JWK public keys bound to the wallet address
+
+    Raises:
+        WalletAddressResolutionError: If resolution fails
+
+    Example::
+
+        keys = await get_wallet_address_keys("https://wallet.example/alice")
+        for key in keys:
+            print(f"{key.kid}: {key.kty}/{key.crv}")
+    """
+    logger.info("Fetching wallet address keys: %s", wallet_address_url)
+
+    # Normalize URL (same logic as resolve_wallet_address)
+    url = wallet_address_url.strip()
+    if url.startswith("$"):
+        url = f"https://{url[1:]}"
+    elif not url.startswith("https://"):
+        if url.startswith("http://"):
+            raise WalletAddressResolutionError(
+                f"Wallet addresses must use HTTPS: {url}"
+            )
+        url = f"https://{url}"
+
+    # Append /jwks.json
+    keys_url = f"{url.rstrip('/')}/jwks.json"
+
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        try:
+            response = await client.get(
+                keys_url,
+                headers={
+                    "Accept": "application/json",
+                },
+                follow_redirects=True,
+            )
+            response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            raise WalletAddressResolutionError(
+                f"Failed to fetch wallet address keys {keys_url}: "
+                f"HTTP {exc.response.status_code}"
+            ) from exc
+        except httpx.RequestError as exc:
+            raise WalletAddressResolutionError(
+                f"Network error fetching wallet address keys {keys_url}: {exc}"
+            ) from exc
+
+    data = response.json()
+
+    if "keys" not in data or not isinstance(data["keys"], list):
+        raise WalletAddressResolutionError(
+            f"Wallet address keys response missing 'keys' array"
+        )
+
+    keys = []
+    for jwk in data["keys"]:
+        keys.append(
+            WalletAddressKey(
+                kty=jwk["kty"],
+                crv=jwk["crv"],
+                x=jwk["x"],
+                kid=jwk.get("kid"),
+                alg=jwk.get("alg"),
+                use=jwk.get("use"),
+            )
+        )
+
+    logger.debug("Found %d keys for wallet address %s", len(keys), wallet_address_url)
+    return keys
+

@@ -2,7 +2,7 @@
 
 **Authors:** Super App Africa Limited (ShujaaPay)  
 **Date:** April 2026  
-**Status:** Active Development — Workstream 3  
+**Status:** ✅ v0.2.0 Released — Workstream 3  
 **Funded by:** Interledger Foundation — SDK Grant Program
 
 ---
@@ -94,13 +94,13 @@ kiota-gnap-auth-python/
 
 | Deliverable | Timeline | Status |
 |-------------|----------|--------|
-| Core `GnapAuthenticationProvider` class | Month 2-3 | 📋 Planned |
-| HTTP Message Signatures (RFC 9421) in Python | Month 2 | 📋 Planned |
-| Token caching (memory + Redis) | Month 3 | 📋 Planned |
-| Interaction handler | Month 3-4 | 📋 Planned |
-| Integration tests with Rafiki testnet | Month 4 | 📋 Planned |
-| PyPI package publication | Month 4-5 | 📋 Planned |
-| Documentation and examples | Month 5 | 📋 Planned |
+| Core `GnapAuthenticationProvider` class | Month 2-3 | ✅ Shipped |
+| HTTP Message Signatures (RFC 9421) in Python | Month 2 | ✅ Shipped |
+| Token caching (memory + Redis) | Month 3 | ✅ In-memory shipped (Redis: future) |
+| Interaction handler | Month 3-4 | ✅ Shipped (redirect + user_code) |
+| Integration tests with Rafiki testnet | Month 4 | 🔜 Pending deployment |
+| PyPI package publication | Month 4-5 | 🔜 Ready for `twine upload` |
+| Documentation and examples | Month 5 | ✅ Shipped |
 
 ## 5. Dependencies
 

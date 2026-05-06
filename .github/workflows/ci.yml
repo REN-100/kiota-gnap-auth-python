@@ -29,10 +29,14 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
 
+      - name: Type check
+        run: |
+          python -m mypy src/kiota_gnap_auth/ --ignore-missing-imports --no-error-summary || true
+
       - name: Run tests
         run: |
           pytest tests/ -v --tb=short
 
       - name: Import check
         run: |
-          python -c "from kiota_gnap_auth import GnapAuthenticationProvider, GnapAccessTokenProvider, GnapGrantManager; print('All imports OK')"
+          python -c "from kiota_gnap_auth import GnapAuthenticationProvider, GnapAccessTokenProvider, GnapGrantManager, resolve_wallet_address, WalletAddressInfo; print('All imports OK')"
