@@ -3,13 +3,50 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "kiota-gnap-auth-python"
+name = "shujaapay-kiota-gnap-auth"
 version = "0.1.0"
-description = "GNAP authentication provider for Kiota-generated Python clients"
+description = "Kiota GNAP (RFC 9635) authentication provider for Python — Open Payments SDK generation"
 readme = "README.md"
-requires-python = ">=3.8"
+license = {text = "MIT"}
+requires-python = ">=3.11"
+authors = [
+    {name = "Super App Africa Limited (ShujaaPay)", email = "rensonmumbo@gmail.com"},
+]
+keywords = ["gnap", "kiota", "open-payments", "interledger", "rfc9635", "authentication", "fintech"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Security",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Typing :: Typed",
+]
 dependencies = [
-    "microsoft-kiota-abstractions",
-        "http-message-signatures", # To be implemented/integrated
-        ]
-        
+    "microsoft-kiota-abstractions>=1.0",
+    "httpx>=0.24",
+    "cryptography>=41",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-asyncio>=0.21",
+    "respx>=0.20",
+]
+
+[project.urls]
+Homepage = "https://www.shujaapay.me"
+Repository = "https://github.com/REN-100/kiota-gnap-auth-python"
+Documentation = "https://github.com/REN-100/kiota-gnap-auth-python#readme"
+"Bug Tracker" = "https://github.com/REN-100/kiota-gnap-auth-python/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
