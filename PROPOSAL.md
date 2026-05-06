@@ -3,7 +3,7 @@
 **Authors:** Super App Africa Limited (ShujaaPay)  
 **Date:** April 2026  
 **Status:** ✅ v0.2.0 Released — Workstream 3  
-**Funded by:** Interledger Foundation — SDK Grant Program
+**Submitted to:** Interledger Foundation — SDK Grant Program
 
 ---
 
@@ -153,5 +153,4 @@ Full type annotations throughout, compatible with `mypy --strict`.
 **Submitted by:**  
 Super App Africa Limited  
 ShujaaPay — Global Payments. Local Freedom.  
-Interledger Foundation SDK Grant Recipient  
 Contact: rensonmumbo@gmail.com

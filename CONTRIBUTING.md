@@ -89,7 +89,7 @@ This library implements several RFCs. When making changes, please reference the 
 
 ## AI Disclosure
 
-Per the [Interledger Foundation SDK grant program](https://github.com/interledger/Grants/wiki/SDK-grant-program), use of generative AI must be disclosed in pull requests. If you use AI tools, please include:
+Per best practices (see [Interledger Foundation SDK grant program](https://github.com/interledger/Grants/wiki/SDK-grant-program)), use of generative AI should be disclosed in pull requests. If you use AI tools, please include:
 
 - The tool/model used
 - How it was used (code generation, review, documentation, etc.)
