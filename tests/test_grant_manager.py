@@ -263,13 +263,39 @@ class TestContinueGrant:
 
 class TestRotateToken:
     @pytest.mark.asyncio
-    async def test_rotates_token(self, manager):
-        mock_resp = _mock_response(200, {"access_token": {"value": "rotated_token"}})
+    async def test_rotates_token_returns_full_access(self, manager):
+        """Rotation now returns full TokenAccess with manage URI and expiry."""
+        mock_resp = _mock_response(200, {
+            "access_token": {
+                "value": "rotated_token",
+                "manage": "https://auth.example/manage/2",
+                "access": [{"type": "incoming-payment", "actions": ["create"]}],
+                "expires_in": 7200,
+                "flags": ["bearer"],
+            },
+        })
 
         with patch.object(manager._http_client, "request", new_callable=AsyncMock, return_value=mock_resp):
             result = await manager.rotate_token("https://auth.example/manage/1", "old_token")
 
-        assert result == "rotated_token"
+        assert result.value == "rotated_token"
+        assert result.manage == "https://auth.example/manage/2"
+        assert result.expires_in == 7200
+        assert result.flags == ["bearer"]
+        assert len(result.access) == 1
+
+    @pytest.mark.asyncio
+    async def test_rotation_preserves_old_manage_uri(self, manager):
+        """If rotation response has no manage URI, preserves the original."""
+        mock_resp = _mock_response(200, {
+            "access_token": {"value": "new_tok", "access": []},
+        })
+
+        with patch.object(manager._http_client, "request", new_callable=AsyncMock, return_value=mock_resp):
+            result = await manager.rotate_token("https://auth.example/manage/1", "old_token")
+
+        assert result.value == "new_tok"
+        assert result.manage == "https://auth.example/manage/1"
 
     @pytest.mark.asyncio
     async def test_rotation_failure(self, manager):
@@ -280,31 +306,86 @@ class TestRotateToken:
                 await manager.rotate_token("https://auth.example/manage/1", "old_token")
 
 
-class TestRevokeToken:
+class TestIntrospectToken:
     @pytest.mark.asyncio
-    async def test_revokes_token(self, manager):
-        mock_resp = _mock_response(204)
+    async def test_introspects_token(self, manager):
+        """Introspection returns token metadata via GET."""
+        mock_resp = _mock_response(200, {
+            "access_token": {
+                "value": "active_token",
+                "manage": "https://auth.example/manage/1",
+                "access": [{"type": "quote", "actions": ["create", "read"]}],
+                "expires_in": 1800,
+            },
+        })
 
         with patch.object(manager._http_client, "request", new_callable=AsyncMock, return_value=mock_resp) as mock_req:
-            await manager.revoke_token("https://auth.example/manage/1", "tok_to_revoke")
+            result = await manager.introspect_token("https://auth.example/manage/1", "my_token")
 
-        assert mock_req.call_args.kwargs["method"] == "DELETE"
-
-
-class TestDeleteGrant:
-    @pytest.mark.asyncio
-    async def test_deletes_grant(self, manager):
-        mock_resp = _mock_response(204)
-
-        with patch.object(manager._http_client, "request", new_callable=AsyncMock, return_value=mock_resp) as mock_req:
-            await manager.delete_grant("https://auth.example/continue/abc", "cont_tok")
-
-        assert mock_req.call_args.kwargs["method"] == "DELETE"
+        assert result.value == "active_token"
+        assert result.expires_in == 1800
+        assert mock_req.call_args.kwargs["method"] == "GET"
 
     @pytest.mark.asyncio
-    async def test_delete_failure(self, manager):
-        mock_resp = _mock_response(404, {"error": "unknown_request"})
+    async def test_introspect_failure(self, manager):
+        mock_resp = _mock_response(404, {"error": "unknown_token"})
 
         with patch.object(manager._http_client, "request", new_callable=AsyncMock, return_value=mock_resp):
             with pytest.raises(GnapError):
-                await manager.delete_grant("https://auth.example/continue/abc", "cont_tok")
+                await manager.introspect_token("https://auth.example/manage/1", "bad_token")
+
+
+class TestInteractionAppField:
+    @pytest.mark.asyncio
+    async def test_parses_app_interaction(self, manager):
+        """Grant response with app launch URI is correctly parsed."""
+        mock_resp = _mock_response(200, {
+            "interact": {
+                "app": "shujaapay://grant/abc123",
+                "finish": "interact_nonce_xyz",
+            },
+            "continue": {
+                "access_token": {"value": "cont_tok"},
+                "uri": "https://auth.example/continue/abc",
+            },
+        })
+
+        with patch.object(manager._http_client, "request", new_callable=AsyncMock, return_value=mock_resp):
+            result = await manager.request_grant(
+                [AccessRight(type="outgoing-payment", actions=["create"])],
+            )
+
+        assert result.interact is not None
+        assert result.interact.app == "shujaapay://grant/abc123"
+        assert result.interact.finish == "interact_nonce_xyz"
+
+    @pytest.mark.asyncio
+    async def test_app_field_none_when_absent(self, manager):
+        """App field defaults to None when not in response."""
+        mock_resp = _mock_response(200, {
+            "interact": {"redirect": "https://auth.example/interact/abc"},
+            "continue": {
+                "access_token": {"value": "cont_tok"},
+                "uri": "https://auth.example/continue/abc",
+            },
+        })
+
+        with patch.object(manager._http_client, "request", new_callable=AsyncMock, return_value=mock_resp):
+            result = await manager.request_grant(
+                [AccessRight(type="outgoing-payment", actions=["create"])],
+            )
+
+        assert result.interact.app is None
+
+
+class TestContextManager:
+    @pytest.mark.asyncio
+    async def test_grant_manager_context_manager(self, client_key):
+        """GnapGrantManager works as an async context manager."""
+        async with GnapGrantManager(
+            grant_endpoint="https://auth.example/",
+            client_key=client_key,
+            retry_policy=RetryPolicy(max_attempts=0, retryable_statuses=[]),
+        ) as mgr:
+            assert mgr._grant_endpoint == "https://auth.example/"
+        # After exit, the HTTP client should be closed

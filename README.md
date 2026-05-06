@@ -15,20 +15,24 @@ Part of the **ShujaaPay GNAP Stack** — open-source tooling for the [Open Payme
 
 ## Features
 
-- **Full GNAP lifecycle** — Grant requests, token acquisition, continuation, rotation, revocation, and grant deletion
+- **Full GNAP lifecycle** — Grant requests, token acquisition, continuation, rotation, revocation, introspection, and grant deletion
+- **Wallet address resolution** — Auto-discover auth server from Open Payments wallet addresses
 - **Kiota-native** — Implements `AuthenticationProvider` interface for seamless SDK integration
 - **HTTP Message Signatures** — Automatic RFC 9421 request signing with `tag="gnap"` (RFC 9635 §7.3.3)
 - **Multi-algorithm keys** — Ed25519 (recommended) and ECDSA-P256 key proofs
 - **Async-first** — Built on `asyncio` and `httpx` for modern Python
+- **Context managers** — `async with` support for automatic resource cleanup
 - **Token management** — In-memory token store with TTL auto-prune and proactive 30s grace refresh
 - **Concurrent acquisition guard** — Prevents duplicate grants for simultaneous requests
 - **Continuation polling** — `poll_continuation()` with `wait` interval support and `too_fast` backoff
 - **Retry with backoff** — Configurable exponential retry for transient failures (429, 5xx)
 - **Lifecycle events** — Event emitter for `token:acquired`, `token:rotated`, `grant:error`, etc.
+- **Structured logging** — Python `logging` module integration (debug/info/warning)
 - **Token flags** — Support for `bearer` and `durable` flags (RFC 9635 §2.1.1)
 - **Content-Digest** — Automatic SHA-256 body digest header for request integrity (RFC 9530)
 - **Interaction hash** — RFC 9635 §4.2.3 verification with timing-safe comparison
 - **Open Payments optimized** — Wallet address identification, `identifier`, `limits` (debitAmount/receiveAmount/interval), client display
+- **PEP 561 typed** — `py.typed` marker for full mypy/pyright support
 
 ## Installation
 
@@ -90,6 +94,48 @@ client = OpenPaymentsClient(adapter)
 
 # 3. Make authenticated API calls — GNAP auth is automatic
 payments = await client.incoming_payments.get()
+```
+
+### Wallet Address Auto-Discovery
+
+```python
+from kiota_gnap_auth import resolve_wallet_address, GnapAuthenticationProvider, GnapAuthOptions, ClientKeyConfig, AccessRight, Algorithm
+
+# Resolve auth server from wallet address (Open Payments)
+wallet_info = await resolve_wallet_address("https://ilp.rafiki.money/alice")
+# wallet_info.auth_server -> "https://auth.rafiki.money"
+# wallet_info.asset_code -> "USD"
+# wallet_info.asset_scale -> 2
+
+# Use discovered auth server
+auth_provider = GnapAuthenticationProvider(
+    GnapAuthOptions(
+        grant_endpoint=wallet_info.auth_server,
+        client_key=ClientKeyConfig(
+            key_id="my-key",
+            private_key=my_ed25519_private_key,
+            algorithm=Algorithm.ED25519,
+        ),
+        access_rights=[
+            AccessRight(
+                type="incoming-payment",
+                actions=["create", "read"],
+                identifier=wallet_info.id,
+            ),
+        ],
+        wallet_address=wallet_info.id,
+    )
+)
+```
+
+### Context Manager Usage
+
+```python
+async with GnapAuthenticationProvider(GnapAuthOptions(...)) as auth:
+    adapter = HttpxRequestAdapter(auth)
+    client = OpenPaymentsClient(adapter)
+    payments = await client.incoming_payments.get()
+# HTTP client automatically closed
 ```
 
 ### Using ECDSA-P256 Keys
@@ -281,24 +327,28 @@ await store.clear()                # Logout cleanup
 ```
 src/kiota_gnap_auth/
   __init__.py                       # Public exports
+  _logging.py                       # Library-level logging (NullHandler)
   gnap_auth_provider.py             # Kiota AuthenticationProvider + AllowedHosts
   gnap_access_token_provider.py     # Token lifecycle with concurrency guard + polling
   gnap_grant_manager.py             # GNAP grant lifecycle (RFC 9635 §2-6)
   http_signature_signer.py          # RFC 9421 signing + JWK export + Content-Digest
   token_store.py                    # In-memory token storage with TTL + peek
+  wallet_address.py                 # Open Payments wallet address resolution
   errors.py                         # GnapError, GnapInteractionRequiredError (§3.6)
   retry.py                          # Exponential backoff retry policy
   events.py                         # Typed event emitter for lifecycle events
   interaction_hash.py               # Interaction hash verification (§4.2.3)
   types.py                          # Python dataclasses + Open Payments types
+  py.typed                          # PEP 561 marker
 tests/
   test_types.py                     # 15 tests: Amount, PaymentLimits, AccessRight, flags
   test_errors.py                    # 16 tests: error types, parsing, recovery
   test_token_store.py               # 10 tests: CRUD, TTL, auto-prune, peek
-  test_grant_manager.py             # 18 tests: grant/continue/rotate/revoke/delete/OP/ECDSA
+  test_grant_manager.py             # 26 tests: grant/continue/rotate/revoke/introspect/app/ctx
   test_access_token_provider.py     # 14 tests: cache, rotation, concurrency, events
   test_interaction_hash.py          # 8 tests: SHA-256/512, tamper, injection
   test_retry.py                     # 7 tests: retry, backoff, exhaustion
+  test_wallet_address.py            # 9 tests: resolution, $format, HTTP, KES
 ```
 
 ## Related Projects

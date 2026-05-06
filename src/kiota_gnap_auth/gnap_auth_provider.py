@@ -138,3 +138,13 @@ class GnapAuthenticationProvider(AuthenticationProvider):
             request=request,
             client_key=self._options.client_key,
         )
+
+    async def close(self) -> None:
+        """Close the underlying HTTP client and release resources."""
+        await self._grant_manager.close()
+
+    async def __aenter__(self) -> "GnapAuthenticationProvider":
+        return self
+
+    async def __aexit__(self, *exc: Any) -> None:
+        await self.close()

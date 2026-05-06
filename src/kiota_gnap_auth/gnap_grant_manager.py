@@ -7,7 +7,7 @@ ecosystem:
 - Grant requests (§2) with Open Payments identifier/limits support
 - Grant responses (§3) with structured error handling
 - Continuation (§5) with wait interval support
-- Token management (§6) — rotation and revocation
+- Token management (§6) — rotation, revocation, introspection
 - Grant deletion (§5.4)
 - Content-Digest header (RFC 9530) for body integrity
 - HTTP Message Signatures with tag="gnap" (RFC 9421/9635)
@@ -21,6 +21,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import logging
 import secrets
 from typing import Any, Optional
 
@@ -39,6 +40,8 @@ from .types import (
     InteractionResponse,
     TokenAccess,
 )
+
+logger = logging.getLogger("kiota_gnap_auth.grant_manager")
 
 
 class GnapGrantManager:
@@ -221,23 +224,25 @@ class GnapGrantManager:
         self,
         management_uri: str,
         current_token: str,
-    ) -> str:
+    ) -> TokenAccess:
         """
         Rotate an existing access token (RFC 9635 §6.1).
 
         Presents the current access token to the management URI
-        to receive a new one.
+        to receive a new one. Returns the full token response including
+        the potentially new management URI, expiry, and flags.
 
         Args:
             management_uri: Token management URI
             current_token: Current access token value
 
         Returns:
-            New access token value
+            Full TokenAccess with new value, manage URI, expiry, flags
 
         Raises:
             GnapError: On rotation failure
         """
+        logger.info("Rotating token via %s", management_uri)
         response = await self._make_signed_request(
             url=management_uri,
             method="POST",
@@ -249,7 +254,79 @@ class GnapGrantManager:
             raise await parse_gnap_error_response(response)
 
         data = response.json()
-        return data["access_token"]["value"]
+        at = data["access_token"]
+        manage = at.get("manage")
+        if isinstance(manage, dict):
+            manage = manage.get("uri")
+
+        rotated = TokenAccess(
+            value=at["value"],
+            manage=manage or management_uri,
+            access=[
+                AccessRight(
+                    type=a["type"],
+                    actions=a.get("actions", []),
+                    identifier=a.get("identifier"),
+                )
+                for a in at.get("access", [])
+            ],
+            expires_in=at.get("expires_in"),
+            flags=at.get("flags", []),
+        )
+        logger.debug("Token rotated: expires_in=%s", rotated.expires_in)
+        return rotated
+
+    async def introspect_token(
+        self,
+        management_uri: str,
+        current_token: str,
+    ) -> TokenAccess:
+        """
+        Introspect an access token (RFC 9635 §6.3).
+
+        Sends GET to the management URI to retrieve current
+        token status and metadata.
+
+        Args:
+            management_uri: Token management URI
+            current_token: Current access token value
+
+        Returns:
+            Token metadata (active status, access, expiry)
+
+        Raises:
+            GnapError: On introspection failure
+        """
+        logger.debug("Introspecting token at %s", management_uri)
+        response = await self._make_signed_request(
+            url=management_uri,
+            method="GET",
+            bearer_token=current_token,
+        )
+
+        if not _is_ok(response):
+            raise await parse_gnap_error_response(response)
+
+        data = response.json()
+        at = data.get("access_token", data)
+        manage = at.get("manage")
+        if isinstance(manage, dict):
+            manage = manage.get("uri")
+
+        return TokenAccess(
+            value=at.get("value", current_token),
+            manage=manage or management_uri,
+            access=[
+                AccessRight(
+                    type=a["type"],
+                    actions=a.get("actions", []),
+                    identifier=a.get("identifier"),
+                )
+                for a in at.get("access", [])
+            ],
+            expires_in=at.get("expires_in"),
+            flags=at.get("flags", []),
+        )
 
     async def revoke_token(
         self,
@@ -301,6 +378,7 @@ class GnapGrantManager:
 
         Includes retry logic for transient failures.
         """
+        logger.debug("%s %s", method, url)
         headers: dict[str, str] = {
             "Content-Type": "application/json",
         }
@@ -420,6 +498,7 @@ class GnapGrantManager:
 
             interact = InteractionResponse(
                 redirect=i.get("redirect"),
+                app=i.get("app"),
                 user_code=user_code,
                 user_code_uri=user_code_uri,
                 finish=i.get("finish"),
@@ -443,6 +522,12 @@ class GnapGrantManager:
     async def close(self) -> None:
         """Close the HTTP client."""
         await self._http_client.aclose()
+
+    async def __aenter__(self) -> "GnapGrantManager":
+        return self
+
+    async def __aexit__(self, *exc: Any) -> None:
+        await self.close()
 
 
 def _is_ok(response: httpx.Response) -> bool:

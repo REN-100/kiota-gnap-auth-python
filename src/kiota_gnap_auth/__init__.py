@@ -10,6 +10,9 @@ Part of the ShujaaPay GNAP Stack.
 @see https://www.shujaapay.me
 """
 
+# Library-level logging (NullHandler default)
+from . import _logging  # noqa: F401
+
 # Core providers
 from .gnap_auth_provider import GnapAuthenticationProvider
 from .gnap_access_token_provider import GnapAccessTokenProvider
@@ -17,6 +20,13 @@ from .gnap_grant_manager import GnapGrantManager
 
 # Token storage
 from .token_store import InMemoryTokenStore
+
+# Wallet address resolution (Open Payments)
+from .wallet_address import (
+    resolve_wallet_address,
+    WalletAddressInfo,
+    WalletAddressResolutionError,
+)
 
 # Error handling (RFC 9635 §3.6)
 from .errors import GnapError, GnapInteractionRequiredError, parse_gnap_error_response
@@ -43,6 +53,7 @@ from .types import (
     PaymentLimits,
     InteractionConfig,
     InteractionFinish,
+    InteractionResponse,
     GrantResponse,
     ContinuationInfo,
     TokenInfo,
@@ -59,6 +70,10 @@ __all__ = [
     "GnapGrantManager",
     # Storage
     "InMemoryTokenStore",
+    # Wallet address
+    "resolve_wallet_address",
+    "WalletAddressInfo",
+    "WalletAddressResolutionError",
     # Errors
     "GnapError",
     "GnapInteractionRequiredError",
@@ -84,6 +99,7 @@ __all__ = [
     "PaymentLimits",
     "InteractionConfig",
     "InteractionFinish",
+    "InteractionResponse",
     "GrantResponse",
     "ContinuationInfo",
     "TokenInfo",
@@ -93,4 +109,4 @@ __all__ = [
     "ProofMethod",
 ]
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"

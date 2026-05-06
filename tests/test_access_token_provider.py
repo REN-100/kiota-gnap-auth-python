@@ -119,7 +119,11 @@ class TestGetAuthorizationToken:
             expires_at=time.time() - 100,  # expired
         ))
 
-        mock_grant_manager.rotate_token.return_value = "rotated_tok"
+        mock_grant_manager.rotate_token.return_value = TokenAccess(
+            value="rotated_tok",
+            manage="https://auth.example/manage/2",
+            expires_in=7200,
+        )
 
         result = await provider.get_authorization_token()
         assert result == "rotated_tok"
@@ -167,7 +171,9 @@ class TestEvents:
             value="old", management_uri="https://auth.example/manage/1",
             expires_at=time.time() - 100,
         ))
-        mock_grant_manager.rotate_token.return_value = "rotated"
+        mock_grant_manager.rotate_token.return_value = TokenAccess(
+            value="rotated", manage="https://auth.example/manage/1", expires_in=3600,
+        )
 
         await provider.get_authorization_token()
         assert len(events) == 1

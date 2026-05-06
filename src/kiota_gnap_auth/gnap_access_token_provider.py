@@ -18,6 +18,7 @@ Features:
 from __future__ import annotations
 
 import asyncio
+import logging
 import time
 from typing import Any, Optional
 
@@ -40,6 +41,9 @@ MAX_POLL_ATTEMPTS = 30
 
 # Default poll interval if AS doesn't specify `wait` (seconds)
 DEFAULT_POLL_WAIT_S = 5
+
+logger = logging.getLogger("kiota_gnap_auth.token_provider")
+
 
 
 class GnapAccessTokenProvider:
@@ -128,28 +132,34 @@ class GnapAccessTokenProvider:
         stale = peeked
         if stale and stale.management_uri and stale.value:
             try:
-                new_value = await self._grant_manager.rotate_token(
+                rotated = await self._grant_manager.rotate_token(
                     stale.management_uri, stale.value
                 )
                 refreshed = TokenInfo(
-                    value=new_value,
-                    management_uri=stale.management_uri,
-                    access=stale.access,
-                    expires_at=time.time() + 3600,  # Default 1 hour
-                    flags=stale.flags,
+                    value=rotated.value,
+                    management_uri=rotated.manage or stale.management_uri,
+                    access=rotated.access or stale.access,
+                    expires_at=(
+                        time.time() + rotated.expires_in
+                        if rotated.expires_in
+                        else time.time() + 3600
+                    ),
+                    flags=rotated.flags or stale.flags,
                     continuation=stale.continuation,
                 )
                 await self._token_store.set(scope_key, refreshed)
                 self.events.emit("token:rotated", {
                     "scope_key": scope_key,
-                    "management_uri": stale.management_uri,
+                    "management_uri": refreshed.management_uri,
                 })
+                logger.info("Token rotated for scope %s", scope_key)
                 return refreshed.value
             except Exception as exc:
                 self.events.emit("token:rotation_failed", {
                     "scope_key": scope_key,
                     "error": str(exc),
                 })
+                logger.warning("Token rotation failed for %s: %s", scope_key, exc)
                 await self._token_store.delete(scope_key)
 
         # 2. Request a new grant
